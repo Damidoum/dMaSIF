@@ -40,3 +40,17 @@ Link to the [dMaSIF_colab](https://colab.research.google.com/github/casperg92/Ma
 ### How to reference this work
 
 - [Sverrisson, F., Feydy, J., Correia, B. E., & Bronstein, M. M. (2021). Fast end-to-end learning on protein surfaces. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (pp. 15272-15281).](http://dx.doi.org/10.1109/CVPR46437.2021.01502)
+
+### How to run
+- Use the notebook
+- Or via CLI:
+- Download a protein:
+  ```bash
+  cd data_preprocessing
+  python download_pdb.py --pdb 1NPU_A
+  ```
+- Run the main inference script
+  ```bash
+  cd ..
+  python main_inference.py --experiment_name=dMaSIF_site_3layer_16dims_9A_0.7res_150sup_epoch85 --site True --radius 9 --resolution 0.7 --sup_sampling 150 --single_protein True --single_pdb 1NPU_A_A --n_layers 3 --emb_dims 16 --device cpu
+  ```
