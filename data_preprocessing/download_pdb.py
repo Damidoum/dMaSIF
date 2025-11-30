@@ -22,6 +22,11 @@ tmp_dir = Path('./tmp')
 pdb_dir = Path('./pdbs')
 npy_dir = Path('./npys')
 
+# Create directories if they don't exist
+tmp_dir.mkdir(exist_ok=True)
+pdb_dir.mkdir(exist_ok=True)
+npy_dir.mkdir(exist_ok=True)
+
 PROTEIN_LETTERS = [x.upper() for x in IUPACData.protein_letters_3to1.keys()]
 
 # Exclude disordered atoms.
@@ -104,51 +109,61 @@ def protonate(in_pdb_file, out_pdb_file):
     outfile.close()
 
 
+def download_pdb(pdb_id, output_file):
+    """
+    Download a PDB file from RCSB using wget
+    """
+    url = f"https://files.rcsb.org/view/{pdb_id}.pdb"
+    cmd = f"wget -qnc -O {output_file} {url}"
+    result = os.system(cmd)
+    
+    if result != 0 or not os.path.exists(output_file):
+        raise Exception(f"Failed to download PDB {pdb_id}")
+    
+    return output_file
 
-def get_single(pdb_id: str,chains: list):
-    protonated_file = pdb_dir/f"{pdb_id}.pdb"
+
+def get_single(pdb_id: str, chains: list):
+    protonated_file = pdb_dir / f"{pdb_id}.pdb"
+    
     if not protonated_file.exists():
-        # Download pdb 
-        pdbl = PDBList()
-        pdb_filename = pdbl.retrieve_pdb_file(pdb_id, pdir=tmp_dir,file_format='pdb')
-
-        ##### Protonate with reduce, if hydrogens included.
-        # - Always protonate as this is useful for charges. If necessary ignore hydrogens later.
-        protonate(pdb_filename, protonated_file)
+        # Download the PDB with wget
+        raw_pdb_file = tmp_dir / f"{pdb_id}_raw.pdb"
+        print(f"Downloading {pdb_id}...")
+        download_pdb(pdb_id, raw_pdb_file)
+        
+        # Protonate with reduce
+        print(f"Protonating {pdb_id}...")
+        protonate(raw_pdb_file, protonated_file)
 
     pdb_filename = protonated_file
 
     # Extract chains of interest.
     for chain in chains:
-        out_filename = pdb_dir/f"{pdb_id}_{chain}.pdb"
+        out_filename = pdb_dir / f"{pdb_id}_{chain}.pdb"
+        print(f"Extracting chain {chain}...")
         extractPDB(pdb_filename, str(out_filename), chain)
-        protein = load_structure_np(out_filename,center=False)
+        protein = load_structure_np(out_filename, center=False)
         np.save(npy_dir / f"{pdb_id}_{chain}_atomxyz", protein["xyz"])
         np.save(npy_dir / f"{pdb_id}_{chain}_atomtypes", protein["types"])
+        print(f"Saved {pdb_id}_{chain}")
 
-def convert_to_npy(target_pdb, chains_dir, npy_dir, chains = ['A']):
+
+def convert_to_npy(target_pdb, chains_dir, npy_dir, chains=['A']):
     pdb_id = target_pdb.split('/')[-1]
     pdb_id = pdb_id[:-4]
     protonated_file = target_pdb
-    #if not protonated_file.exists():
-        # Download pdb 
-    #    pdbl = PDBList()
-    #    pdb_filename = pdbl.retrieve_pdb_file(pdb_id, pdir='/content/tmp',file_format='pdb')
-
-        ##### TO DO!!!! ADD PROTONATION. REDUCE IS C++ BUT SHOULD HAVE A PACKAGE IN OPENMM. #####
-        ##### Protonate with reduce, if hydrogens included.
-        # - Always protonate as this is useful for charges. If necessary ignore hydrogens later.
-        # protonate(pdb_filename, protonated_file)
 
     pdb_filename = protonated_file
 
     # Extract chains of interest.
     for chain in chains:
-        out_filename = chains_dir +"/"+ "{id}_{chain}.pdb".format(id=pdb_id,chain=chain)
+        out_filename = chains_dir + "/" + "{id}_{chain}.pdb".format(id=pdb_id, chain=chain)
         extractPDB(pdb_filename, str(out_filename), chain)
-        protein = load_structure_np(out_filename,center=False)
-        np.save(npy_dir +"/"+ "{id}_{chain}_atomxyz".format(id=pdb_id,chain=chain), protein["xyz"])
-        np.save(npy_dir +"/"+ "{id}_{chain}_atomtypes".format(id=pdb_id,chain=chain), protein["types"])
+        protein = load_structure_np(out_filename, center=False)
+        np.save(npy_dir + "/" + "{id}_{chain}_atomxyz".format(id=pdb_id, chain=chain), protein["xyz"])
+        np.save(npy_dir + "/" + "{id}_{chain}_atomtypes".format(id=pdb_id, chain=chain), protein["types"])
+
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -156,15 +171,15 @@ if __name__ == '__main__':
         pdb_id = args.pdb.split('_')
         chains = pdb_id[1:]
         pdb_id = pdb_id[0]
-        get_single(pdb_id,chains)
+        get_single(pdb_id, chains)
 
     elif args.pdb_list != '':
         with open(args.pdb_list) as f:
             pdb_list = f.read().splitlines()
-        for pdb_id in pdb_list:
-           pdb_id = pdb_id.split('_')
-           chains = pdb_id[1:]
-           pdb_id = pdb_id[0]
-           get_single(pdb_id,chains)
+        for pdb_entry in pdb_list:
+            pdb_id = pdb_entry.split('_')
+            chains = pdb_id[1:]
+            pdb_id = pdb_id[0]
+            get_single(pdb_id, chains)
     else:
-        raise ValueError('Must specify PDB or PDB list') 
+        raise ValueError('Must specify PDB or PDB list')
